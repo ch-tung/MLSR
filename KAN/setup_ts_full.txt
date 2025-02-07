@@ -1,0 +1,5 @@
+exp_scale: 2
+index_parameters: (parameters_list[:,2]<=25)*(parameters_list[:,0]<=0.405)*(parameters_list[:,0]>=0.00003)
+mat_filename_grid: ./training_sets/fg/SQ_grid_fg.mat
+mat_filename_rand: ./training_sets/fg/SQ_rand_fg.mat
+outliers_threshold: 3

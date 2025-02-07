@@ -1,0 +1,1 @@
+./saved_model/KAN/model_77_17_grid_ft64.pth
