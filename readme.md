@@ -3,7 +3,7 @@
 SANS is a commonly used technique for structural study of materials. However, its effectiveness is often perceived to depend on the availability of high incident neutron flux. In this work, we introduce a data analysis method grounded in the properties of multivariate Gaussian distributions, which accounts for the proximity relationships among detector pixels. This approach enhances the ability to identify trends obscured by statistical noise while simultaneously providing confidence intervals for measurements.
 Our method demonstrates robustness against incoherent noise and accommodates variations in sample size and limited beam-time exposures. Crucially, it relies entirely on statistical inference from individual sparse measurements, eliminating the need for sample- or instrument-specific training datasets typically required for machine learning approaches. This innovation significantly enhances the measurement capabilities of CANS for structural studies using SANS.
 
-![image](https://hackmd.io/_uploads/B16Tefd_1l.png)
+![image](https://hackmd.io/_uploads/S1N2BRXFJx.png)
 
 ### Neutron Scattering with Limited Flux
 Here we choose the $I(Q)$ of uniform hard sphere as example.
