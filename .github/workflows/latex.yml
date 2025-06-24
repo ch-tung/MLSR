@@ -6,8 +6,8 @@ on:
       - '**.tex'
       - '**.bib'
       - '**.sty'
-      - '**.png'
-      - '**.jpg'
+      # - '**.png'
+      # - '**.jpg'
 
 jobs:
   build:
