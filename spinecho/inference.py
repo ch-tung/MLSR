@@ -116,7 +116,7 @@ def bayesian_inference_grid(S_exp, delta_S_exp, Q, t, tau, lambda_, bg_mode=Fals
 
 
 # Bayesian inference function for off-grid scattering data
-def bayesian_inference(S_exp, delta_S_exp, Q_obs, t_obs, Q_eval, t_eval, tau, mu_, lambda_, bg_mode=False):
+def bayesian_inference(S_exp, delta_S_exp, Q_obs, t_obs, Q_eval, t_eval, tau, mu_, lambda_, bg_mode=False, sigma_scale=1.0):
     """
         Parameters:
             S_exp (numpy.ndarray): Experimental scattering data (1D array of size M).
@@ -153,15 +153,23 @@ def bayesian_inference(S_exp, delta_S_exp, Q_obs, t_obs, Q_eval, t_eval, tau, mu
     Q_dist = (Q_eval[:, None] - Q_eval[None, :]) ** 2
     spatial_prior_kernel = np.exp(-Q_dist / (2 * lambda_ ** 2))
     K_prior = np.kron(np.eye(N), spatial_prior_kernel)
+    
+    # prior mean vector (LN x 1)
+    if bg_mode == False:
+        mu_prior_flat = np.zeros(L * N)
+    else:
+        mu_prior_flat = np.ones(L * N)/N
 
     # Compute measurement noise covariance matrix (M x M)
-    Sigma = np.diag(delta_S_exp ** 2)
+    Sigma = np.diag((delta_S_exp * sigma_scale) ** 2)
 
     # Compute posterior mean using Cholesky decomposition
     GK = G @ K_prior
     K_tilde = GK @ G.T + Sigma
     cho_K_tilde = cho_factor(K_tilde + 1e-8 * np.eye(M))
-    A_GPR_flat = K_prior @ G.T @ cho_solve(cho_K_tilde, S_exp)
+    # A_GPR_flat = K_prior @ G.T @ cho_solve(cho_K_tilde, S_exp)
+    residual = S_exp - G @ mu_prior_flat
+    A_GPR_flat = mu_prior_flat + K_prior @ G.T @ cho_solve(cho_K_tilde, residual)
 
     # Reshape posterior mean to (L, N)
     A_GPR = A_GPR_flat.reshape(L, N)
