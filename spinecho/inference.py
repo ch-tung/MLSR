@@ -132,8 +132,8 @@ def bayesian_inference(S_exp, delta_S_exp, Q_obs, t_obs, Q_eval, t_eval, tau, mu
 
         Returns:
             tuple:
-                - A_GPR (numpy.ndarray): Posterior mean of the scattering function (2D array of shape (L, N)).
-                - K_GPR (numpy.ndarray): Posterior covariance matrix of the scattering function (4D array of shape (L, N, L, N)).
+                - A_GPR (numpy.ndarray): Posterior mean of the coefficients (2D array of shape (L, N)).
+                - K_GPR (numpy.ndarray): Posterior covariance matrix of the coefficients (4D array of shape (L, N, L, N)).
                 - S_reconstructed (numpy.ndarray): Reconstructed scattering function at evaluation points (1D array of size L).
     """ 
     L, M, N = len(Q_eval), len(Q_obs), len(tau)
