@@ -10,6 +10,7 @@ Bayesian/Gaussian-process inference.
 
 - `svs_lib.py`: core SVS library functions.
 - `run_svs_benchmark.py`: command-line benchmark pipeline.
+- `run_svs_efficiency_benchmark.py`: local efficiency benchmark over count-rate factor `kappa`.
 - `svs_tests.py`: testing and self-check scripts.
 - `svs_benchmark_double_exp.ipynb`: notebook reproducing the double-exponential benchmark.
 - `svs_benchmark_output_double_exp/`: current preferred double-exponential result.
@@ -192,6 +193,58 @@ and log-spacing diagnostics.
 ## To Do
 
 ### Efficiency Benchmark
+
+A first local efficiency benchmark script is available:
+
+```bash
+python -B run_svs_efficiency_benchmark.py
+```
+
+Default settings sweep 9 logarithmically spaced count-rate factors:
+
+```text
+kappa = geomspace(1e-2, 1e2, 9)
+```
+
+with `n_rand = 3` random seeds per kappa. The script compares:
+
+```text
+MSE_Bayes = mean((C_Bayes(tau) - C_true(tau))^2)
+MSE_direct = mean((C_direct(tau) - C_true(tau))^2)
+```
+
+over the delay window `0.05 <= tau <= 5.0`, after interpolating the direct
+autocorrelation estimate onto the Bayesian reconstruction grid.
+
+Current outputs are written to:
+
+```text
+svs_efficiency_output/
+```
+
+and include:
+
+- `efficiency_metrics.json`
+- `mse_vs_kappa.png`, with Bayes/direct MSE on the left log axis and empty sample rate on the right axis
+- `chi_square_vs_kappa.png`, with visibility reduced chi-square plotted from 0.1 to 10
+- `sigma_C_vs_kappa.png` when `--tune-sigma-C` is used
+- `example_reconstructions_by_kappa.png`
+
+The prior variance scale can be tuned dynamically to match the visibility noise
+level:
+
+```bash
+python -B run_svs_efficiency_benchmark.py --tune-sigma-C --n-sigma-C 7 --output-folder svs_efficiency_output
+```
+
+This scans log-spaced `sigma_C` values and chooses the one whose visibility
+space reduced chi-square is closest to one. It is an empirical-Bayes diagnostic:
+it asks for a prior variance that makes the forward prediction fit
+`Khat^2(T)` at roughly the measured noise level. It does not guarantee smaller
+autocorrelation MSE at every `kappa`, especially when the count rate is so low
+that the visibility estimates themselves are poor.
+
+### Further Efficiency Benchmark Work
 
 Build a systematic benchmark over count rate/noise level using different values
 of `kappa`. The goal is to quantify when the SVS Bayesian inversion outperforms
