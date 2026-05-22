@@ -183,7 +183,7 @@ def plot_publication_strategy_figure(q, intensity, sigma, output_path):
     ax_right.axhline(E_current, color="black", lw=1.6, ls="--", label="Current")
     ax_right.plot(n_values[best_index], E_values[best_index], "o", color="red", ms=7.0, label="Optimized")
     ax_right.set_xlabel(r"$n$")
-    ax_right.set_ylabel(r"$\mathcal{E}$")
+    ax_right.set_ylabel(r"$\mathcal{E}_0$")
     ax_right.set_ylim(0.04, 0.09)
     ax_right.set_box_aspect(1)
     ax_right.grid(True, alpha=0.25)
