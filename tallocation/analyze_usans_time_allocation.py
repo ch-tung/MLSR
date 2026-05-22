@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from usans_lib import EPS, inverse_intensity_power_allocation, uniform_allocation
 
@@ -105,6 +106,10 @@ def plot_publication_strategy_figure(q, intensity, sigma, output_path):
 
     sigma_current = np.sqrt(np.maximum(smooth_intensity, EPS) / np.maximum(t_current, EPS))
     sigma_opt = np.sqrt(np.maximum(smooth_intensity, EPS) / np.maximum(t_opt, EPS))
+    rel_current_sigma = sigma_current / np.maximum(smooth_intensity, EPS)
+    rel_opt_sigma = sigma_opt / np.maximum(smooth_intensity, EPS)
+    rel_opt_sigma_band = smooth_intensity_log_gaussian(q, rel_opt_sigma, ell_log=0.16)
+    sigma_opt_band = rel_opt_sigma_band * smooth_intensity
     E_current = averaged_relative_counting_error(smooth_intensity, t_current)
 
     n_values = np.linspace(0.0, 1.0, 201)
@@ -140,8 +145,8 @@ def plot_publication_strategy_figure(q, intensity, sigma, output_path):
     )
     ax_left.fill_between(
         q,
-        np.maximum((smooth_intensity - sigma_opt) * shift, EPS),
-        (smooth_intensity + sigma_opt) * shift,
+        np.maximum((smooth_intensity - sigma_opt_band) * shift, EPS),
+        (smooth_intensity + sigma_opt_band) * shift,
         color="red",
         alpha=0.18,
         linewidth=0,
@@ -167,6 +172,39 @@ def plot_publication_strategy_figure(q, intensity, sigma, output_path):
     ax_left.set_box_aspect(1)
     ax_left.grid(True, which="both", alpha=0.25)
     ax_left.legend(frameon=False)
+    inset = inset_axes(
+        ax_left,
+        width="50%",
+        height="32%",
+        bbox_to_anchor=(-0.38, -0.6, 1, 1),
+        bbox_transform=ax_left.transAxes,
+    )
+    inset.fill_between(
+        q,
+        np.maximum(1.0 - rel_current_sigma, EPS),
+        1.0 + rel_current_sigma,
+        color="black",
+        alpha=0.18,
+        linewidth=0,
+    )
+    inset.fill_between(
+        q,
+        np.maximum(1.0 - rel_opt_sigma_band, EPS),
+        1.0 + rel_opt_sigma_band,
+        color="red",
+        alpha=0.18,
+        linewidth=0,
+    )
+    inset.axhline(1.0, color="0.35", lw=0.9, ls="--", alpha=0.75)
+    inset.set_xscale("log")
+    inset.set_ylim(0.5, 1.5)
+    inset.set_yticks([0.5, 1.0, 1.5])
+    inset.set_xlabel(r"$Q$", fontsize=10)
+    inset.set_ylabel(r"$I/I_{\mathrm{gt}}$", fontsize=10, rotation=0)
+    inset.xaxis.set_label_coords(1, -0.08)
+    inset.yaxis.set_label_coords(-0.1, 1.05)
+    inset.tick_params(labelsize=8)
+    inset.grid(True, which="both", alpha=0.18)
     ax_left.text(
         0.02,
         0.98,
