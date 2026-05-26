@@ -31,7 +31,7 @@ from usans_lib import (
 )
 
 
-def build_publication_state():
+def build_publication_state(q_grid="log"):
     """Build the benchmark state needed for the publication figure."""
     Q_min = 1.0e-5
     Q_max = 1.0e-3
@@ -48,7 +48,13 @@ def build_publication_state():
     eta_H = 0.05
     target_uniform_counts_per_point = 100.0
 
-    Q = make_q_grid(Q_min, Q_max, N)
+    q_grid = q_grid.lower()
+    if q_grid == "log":
+        Q = np.logspace(np.log10(Q_min), np.log10(Q_max), N)
+    elif q_grid == "lin":
+        Q = make_q_grid(Q_min, Q_max, N)
+    else:
+        raise ValueError("q_grid must be 'lin' or 'log'")
     I_true = make_lorentzian_ground_truth(Q, I0, xi_lorentzian, background)
 
     Q_model = make_resolution_model_grid(Q, Q_model_max, N_model_tail)
@@ -122,7 +128,7 @@ def build_publication_state():
         case["g_opt_demo"] = g_opt
 
     T_values = np.logspace(-2, 2, 80)
-    power_values = np.linspace(0.0, 1.0, 201)
+    power_values = np.linspace(0.0, 1.0, 401)
     power_rows = []
     optimal_rows = []
     summary_rows = []
@@ -171,11 +177,12 @@ def build_publication_state():
         "summary_rows": summary_rows,
         "T_tot_fig1": T_tot_fig1,
         "kernel_info": kernel_info,
+        "q_grid": q_grid,
     }
 
 
 def _plot_publication_figure(state, output_path):
-    """Create the three-panel publication figure."""
+    """Create the four-panel publication figure."""
     Q = state["Q"]
     I_true = state["I_true"]
     allocations = state["allocations"]
@@ -184,19 +191,22 @@ def _plot_publication_figure(state, output_path):
     optimal_rows = state["optimal_rows"]
     T_tot_fig1 = state["T_tot_fig1"]
 
-    fig = plt.figure(figsize=(14.0, 4.8), constrained_layout=True)
-    gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 1])
+    fig = plt.figure(figsize=(9.6, 9.0), constrained_layout=True)
+    gs = fig.add_gridspec(2, 2)
     ax_a = fig.add_subplot(gs[0, 0])
     ax_b = fig.add_subplot(gs[0, 1])
-    ax_c = fig.add_subplot(gs[0, 2])
+    ax_c = fig.add_subplot(gs[1, 0])
+    ax_d = fig.add_subplot(gs[1, 1])
 
     _plot_power_panel(ax_a, state, power_rows, optimal_rows, allocations, Q, I_true)
-    _plot_error_band_absolute(ax_b, Q, cases["Base case"], T_tot_fig1)
-    _plot_error_band_relative(ax_c, Q, I_true, cases["Base case"], T_tot_fig1)
+    _plot_total_count_panel(ax_b, Q, I_true, T_tot_fig1)
+    _plot_error_band_absolute(ax_c, Q, cases["Base case"], T_tot_fig1)
+    _plot_error_band_relative(ax_d, Q, I_true, cases["Base case"], T_tot_fig1)
 
     ax_a.text(0.02, 0.98, "(a)", transform=ax_a.transAxes, ha="left", va="top", fontsize=14, fontweight="bold")
     ax_b.text(0.02, 0.98, "(b)", transform=ax_b.transAxes, ha="left", va="top", fontsize=14, fontweight="bold")
     ax_c.text(0.02, 0.98, "(c)", transform=ax_c.transAxes, ha="left", va="top", fontsize=14, fontweight="bold")
+    ax_d.text(0.02, 0.98, "(d)", transform=ax_d.transAxes, ha="left", va="top", fontsize=14, fontweight="bold")
 
     fig.savefig(output_path, dpi=300)
     plt.close(fig)
@@ -206,17 +216,22 @@ def _plot_power_panel(ax, state, power_rows, optimal_rows, allocations, Q, I_tru
     colors = {"Base case": "black", "Correlation-aware": "blue", "Bonse-Hart silt smeared": "red"}
     case_name = "Base case"
     sub = [row for row in power_rows if row["case"] == case_name]
+    power_to_error = {float(row["power_n"]): float(row["E"]) for row in sub}
     ax.plot(
         [row["power_n"] for row in sub],
         [row["E"] for row in sub],
         color=colors[case_name],
         lw=2.0,
-        label=case_name,
     )
-    opt = next(row for row in optimal_rows if row["case"] == case_name)
-    ax.axhline(opt["E_opt"], color=colors[case_name], lw=1.5, ls="--", alpha=0.8)
+    strategy_markers = [
+        (0.0, "black", r"$\nu=0$"),
+        (0.5, "red", r"$\nu=0.5$"),
+        (1.0, "blue", r"$\nu=1$"),
+    ]
+    for power, color, label in strategy_markers:
+        ax.plot(power, power_to_error[power], "o", color=color, ms=6.5, label=label)
 
-    ax.set_xlabel(r"$n$")
+    ax.set_xlabel(r"$\nu$")
     ax.set_ylabel(r"$\mathcal{E}_0$")
     # ax.set_yscale("log")
     ax.set_ylim([0.08,0.12])
@@ -236,9 +251,9 @@ def _plot_power_panel(ax, state, power_rows, optimal_rows, allocations, Q, I_tru
     # t_n0 = inverse_intensity_power_allocation(I_true, 0.0, state["T_tot_fig1"])
     # t_n05 = inverse_intensity_power_allocation(I_true, 0.5, state["T_tot_fig1"])
     # t_n1 = inverse_intensity_power_allocation(I_true, 1.0, state["T_tot_fig1"])
-    # inset.plot(Q, t_n0, color="black", lw=1.6, label=r"$n=0$")
-    # inset.plot(Q, t_n05, color="blue", lw=1.6, label=r"$n=0.5$")
-    # inset.plot(Q, t_n1, color="red", lw=1.6, label=r"$n=1$")
+    # inset.plot(Q, t_n0, color="black", lw=1.6, label=r"$\nu=0$")
+    # inset.plot(Q, t_n05, color="blue", lw=1.6, label=r"$\nu=0.5$")
+    # inset.plot(Q, t_n1, color="red", lw=1.6, label=r"$\nu=1$")
     # inset.set_xscale("log")
     # inset.set_yscale("log")
     # inset.set_xlabel(r"$Q$ ($\mathrm{\AA}^{-1}$)", fontsize=10)
@@ -248,13 +263,52 @@ def _plot_power_panel(ax, state, power_rows, optimal_rows, allocations, Q, I_tru
     # inset.legend(frameon=False, fontsize=7, loc="upper right")
 
 
+def _plot_total_count_panel(ax, Q, I_ref, T_tot):
+    """Plot average collected counts per position for fixed total time."""
+    powers = np.linspace(0.0, 1.0, 401)
+    mean_counts = []
+    for power in powers:
+        t = inverse_intensity_power_allocation(I_ref, power, T_tot)
+        mean_counts.append(float(np.mean(I_ref * t)))
+
+    kappa = 1.0
+    count_floor = kappa * T_tot * np.min(I_ref) / I_ref.size
+    t_uniform = uniform_allocation(I_ref.size, T_tot)
+    uniform_counts = float(np.mean(I_ref * t_uniform))
+    t_opt = inverse_intensity_power_allocation(I_ref, 0.5, T_tot)
+    opt_counts = float(np.mean(I_ref * t_opt))
+    t_constant_error = inverse_intensity_power_allocation(I_ref, 1.0, T_tot)
+    constant_error_counts = float(np.mean(I_ref * t_constant_error))
+
+    ax.plot(powers, mean_counts, color="black", lw=2.0)
+    # ax.axhline(
+    #     count_floor,
+    #     color="0.35",
+    #     lw=1.2,
+    #     ls=":",
+    #     alpha=0.85,
+    #     label=r"$\kappa T_{\mathrm{tot}} I_{\min}$",
+    # )
+    ax.plot(0.0, uniform_counts, "o", color="black", ms=6.5, label=r"$\nu=0$")
+    ax.plot(0.5, opt_counts, "o", color="red", ms=6.5, label=r"$\nu=0.5$")
+    ax.plot(1.0, constant_error_counts, "o", color="blue", ms=6.5, label=r"$\nu=1$")
+
+    ax.set_xlabel(r"$\nu$")
+    ax.set_ylabel(r"$N_\mathrm{avg}$")
+    ax.set_ylim(0.0, 120.0)
+    # ax.set_yscale("log")
+    ax.set_box_aspect(1)
+    ax.grid(True, alpha=0.25)
+    ax.legend(frameon=False, fontsize=10)
+
+
 def _plot_error_band_absolute(ax, Q, case, T_tot):
     rng = np.random.default_rng(12345)
     I_ref = case["I_ref"]
     strategy_specs = [
-        ("n=0", 0.0, "black"),
-        (r"$n=0.5$", 0.5, "red"),
-        (r"$n=1$", 1.0, "blue"),
+        (r"$\nu=0$", 0.0, "black"),
+        (r"$\nu=0.5$", 0.5, "red"),
+        (r"$\nu=1$", 1.0, "blue"),
     ]
     shift_factors = [1.0, 8.0, 64.0]
 
@@ -285,8 +339,8 @@ def _plot_error_band_absolute(ax, Q, case, T_tot):
 def _plot_error_band_relative(ax, Q, I_gt, case, T_tot):
     I_ref = case["I_ref"]
     strategy_specs = [
-        ("n=0", 0.0, "black"),
-        ("n=1", 1.0, "blue"),
+        (r"$\nu=0$", 0.0, "black"),
+        (r"$\nu=1$", 1.0, "blue"),
         ("Optimal", "optimal", "red"),
     ]
     shift_factors = [1.0, 8.0, 64.0]
@@ -350,6 +404,12 @@ def _estimate_kernel_variance_chi_square(I_true, K, t_reference):
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-folder", default="publication_figures")
+    parser.add_argument(
+        "--q-grid",
+        choices=["lin", "log"],
+        default="lin",
+        help="Q grid for Figure 1 calculations.",
+    )
     return parser.parse_args()
 
 
@@ -357,8 +417,9 @@ def main():
     args = parse_args()
     output_dir = Path(args.output_folder)
     output_dir.mkdir(parents=True, exist_ok=True)
-    state = build_publication_state()
+    state = build_publication_state(q_grid=args.q_grid)
     _plot_publication_figure(state, output_dir / "publication_figure1.png")
+    print(f"Q grid: {args.q_grid}")
     print(f"Wrote {output_dir / 'publication_figure1.png'}")
 
 
