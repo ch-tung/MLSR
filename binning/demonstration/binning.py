@@ -3,7 +3,7 @@
 The MLSR binning notebooks estimate two characteristic scales from a 1D
 scattering curve I(Q):
 
-* h_FD: optimal finite-difference/bin width
+* h_FD: Freedman-Diaconis optimal bin width
 * lambda_opt: optimal Gaussian/RBF kernel length
 
 Both are computed from the signal roughness and a counting-noise scale.
@@ -83,7 +83,7 @@ def estimate_binning_scales(
     use_savgol: bool = True,
     warn_on_coarse_data: bool = True,
 ) -> BinningResult:
-    """Estimate the MLSR finite-difference bin width and kernel size.
+    """Estimate the MLSR Freedman-Diaconis bin width and kernel size.
 
     Parameters
     ----------
@@ -102,7 +102,7 @@ def estimate_binning_scales(
         Use Savitzky-Golay derivative estimates when SciPy is available.
     warn_on_coarse_data:
         Print a warning if the median input Q spacing is not smaller than the
-        estimated optimal finite-difference/bin width.
+        estimated Freedman-Diaconis optimal bin width.
 
     Notes
     -----

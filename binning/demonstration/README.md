@@ -6,7 +6,7 @@ the MLSR `binning` notebooks.
 The reusable function is `estimate_binning_scales` in `binning.py`. It
 accepts 1D scattering data `I(Q)` and returns:
 
-- `h_fd`: estimated finite-difference/bin width
+- `h_fd`: estimated Freedman-Diaconis optimal bin width
 - `lambda_opt`: estimated Gaussian/RBF kernel length
 - `alpha`, `beta`, `gamma`, `chi`: intermediate quantities from the notebooks
 
