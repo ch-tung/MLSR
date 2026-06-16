@@ -94,7 +94,8 @@ def estimate_binning_scales(
         scale is estimated from ``intensity_error``.
     intensity_error:
         1-sigma uncertainty for each intensity point. Used only when
-        ``total_counts`` is omitted.
+        ``total_counts`` is omitted. In that mode, uncertainties are assumed
+        to describe observations at the current data spacing.
     window_frac, polyorder:
         Savitzky-Golay settings for derivative estimates. The original
         notebooks commonly use a 15 percent window and cubic polynomial.
@@ -331,7 +332,8 @@ def _estimate_alpha_from_uncertainty(
         raise ValueError("intensity_error must have the same shape as q.")
     if not np.all(np.isfinite(err)) or np.any(err <= 0):
         raise ValueError("intensity_error values must be finite and positive.")
-    return float(length * np.mean(err**2))
+    data_bin_width = float(np.median(np.diff(q))) if len(q) > 1 else float(length)
+    return float(data_bin_width * np.mean(err**2))
 
 
 def main() -> None:

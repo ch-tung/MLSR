@@ -15,6 +15,32 @@ mean helper that uses `lambda_opt` as the RBF kernel size. The notebook plots
 ground truth, noisy observations, and the optimized GPR reconstruction with a
 posterior +/- 1 sigma uncertainty band.
 
+The notebook also exposes a `lambda_scale` option. The default value `1.0` uses
+the manuscript-derived `lambda_opt`, while other values let users intentionally
+inspect nearby kernel sizes. Smaller kernels can follow noisy fluctuations,
+whereas wider kernels increase curvature-induced bias from the underlying
+signal. The diagnostic panel below the GPR reconstruction compares a local
+Gaussian-weighted counting-error estimate with `4 x` squared curvature bias.
+The counting-error curve varies with `Q` because each point has different
+measurement uncertainty and a different set of nearby samples inside the kernel.
+The curvature-bias curve is also estimated from the sampled observation using
+the same derivative settings used for `lambda_opt`, so the lower-panel
+diagnostic does not require ground truth.
+Users can adjust `lambda_scale` to choose how strongly they want to trade noise
+suppression against curvature bias for their data.
+
+In the synthetic data generator, `total_counts` is distributed across the full
+Q range in proportion to the underlying intensity. Low-intensity regions
+therefore have fewer counts and larger relative error, even though their
+absolute intensity error can be smaller. The notebook includes
+`use_relative_error`; set it to `True` to plot relative squared contributions
+instead of absolute MSE contributions.
+
+At `lambda_scale = 1`, the integrated comparison is only approximate:
+`lambda_opt` comes from the manuscript's asymptotic average MSE model, while the
+plotted counting error is a finite-data local estimate. The synthetic ground
+truth is shown only in the upper panel to validate the example.
+
 Run the script:
 
 ```powershell
