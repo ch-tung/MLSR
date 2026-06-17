@@ -5,6 +5,7 @@ scattering curve I(Q):
 
 * h_FD: Freedman-Diaconis optimal bin width
 * lambda_opt: optimal Gaussian/RBF kernel length
+* lambda_ab: alpha-beta kernel-length heuristic
 
 Both are computed from the signal roughness and a counting-noise scale.
 """
@@ -28,6 +29,7 @@ class BinningResult:
 
     h_fd: float
     lambda_opt: float
+    lambda_ab: float
     alpha: float
     beta: float
     gamma: float
@@ -54,7 +56,7 @@ def synthetic_scattering_data(
     """
 
     rng = np.random.default_rng(seed)
-    q = np.linspace(0.004, 0.22, n_points)
+    q = np.linspace(0.004, 0.15, n_points)
     true_i = (
         3.0 / (1.0 + (q / 0.035) ** 4)
         + 0.28 * np.exp(-0.5 * ((q - 0.105) / 0.012) ** 2)
@@ -115,6 +117,7 @@ def estimate_binning_scales(
     alpha = A0 / total_counts
     h_FD = (alpha / (2 beta))^(1/3)
     lambda_opt = (alpha / (8 sqrt(pi) gamma))^(1/5)
+    lambda_ab = h_FD
     """
 
     q, intensity = _clean_and_sort(q, intensity)
@@ -169,6 +172,7 @@ def estimate_binning_scales(
 
     h_fd = float((alpha / (2.0 * beta)) ** (1.0 / 3.0))
     lambda_opt = float((alpha / (8.0 * np.sqrt(np.pi) * gamma)) ** (1.0 / 5.0))
+    lambda_ab = h_fd
     chi = float((gamma / beta) * (alpha / beta) ** (2.0 / 3.0))
     if warn_on_coarse_data and data_bin_width >= h_fd:
         print(
@@ -180,6 +184,7 @@ def estimate_binning_scales(
     return BinningResult(
         h_fd=h_fd,
         lambda_opt=lambda_opt,
+        lambda_ab=lambda_ab,
         alpha=float(alpha),
         beta=beta,
         gamma=gamma,
@@ -201,16 +206,24 @@ def rbf_gpr_predict(
     q_predict: Optional[np.ndarray] = None,
     *,
     kernel_size: float,
+    kernel: str = "rbf",
     signal_variance: Optional[float] = None,
     jitter: float = 1.0e-10,
     return_std: bool = False,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
-    """Gaussian-process posterior mean using the optimized RBF kernel size.
+    """Gaussian-process posterior mean using an RBF-equivalent kernel size.
 
     This mirrors the RBF/GPR smoothing step used in the MLSR binning notebooks:
-    train on noisy observations, use ``lambda_opt`` as the RBF length scale,
-    and return the posterior mean at ``q_predict``. Set ``return_std=True`` to
-    also return the posterior 1-sigma uncertainty.
+    train on noisy observations, use ``lambda_opt`` as the RBF-equivalent length
+    scale, and return the posterior mean at ``q_predict``. Set
+    ``return_std=True`` to also return the posterior 1-sigma uncertainty.
+
+    Parameters
+    ----------
+    kernel:
+        ``"rbf"``, ``"matern32"``, or ``"matern52"``. Matern kernels are
+        parameterized so their normalized second moment equals that of an RBF
+        kernel with length ``kernel_size``.
     """
 
     q_train = np.asarray(q_train, dtype=float).reshape(-1)
@@ -242,10 +255,10 @@ def rbf_gpr_predict(
         signal_variance = float(np.var(intensity_train))
     signal_variance = max(float(signal_variance), jitter)
 
-    k_train = _rbf_kernel(q_train, q_train, kernel_size, signal_variance)
+    k_train = _kernel_matrix(q_train, q_train, kernel_size, signal_variance, kernel)
     noise = np.maximum(intensity_error**2, jitter)
     cov = k_train + np.diag(noise + jitter)
-    k_predict = _rbf_kernel(q_predict, q_train, kernel_size, signal_variance)
+    k_predict = _kernel_matrix(q_predict, q_train, kernel_size, signal_variance, kernel)
 
     used_cholesky = False
     try:
@@ -271,6 +284,25 @@ def rbf_gpr_predict(
         posterior_var = prior_var - np.sum(k_predict * projected.T, axis=1)
     posterior_std = np.sqrt(np.maximum(posterior_var, 0.0))
     return mean, posterior_std
+
+
+def kernel_smoothing_weights(
+    q_predict: np.ndarray,
+    q_train: np.ndarray,
+    *,
+    kernel_size: float,
+    kernel: str = "rbf",
+) -> np.ndarray:
+    """Normalized smoothing weights for the supported kernels.
+
+    This is useful for visual diagnostics such as local counting-error
+    propagation. The Matern options use the same second-moment matching as
+    ``rbf_gpr_predict``.
+    """
+
+    weights = _kernel_matrix(q_predict, q_train, kernel_size, 1.0, kernel)
+    sums = weights.sum(axis=1, keepdims=True)
+    return weights / np.maximum(sums, np.finfo(float).eps)
 
 
 def _clean_and_sort(q: np.ndarray, intensity: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -304,14 +336,27 @@ def _choose_savgol_window(n: int, window_frac: float, polyorder: int) -> int:
     return min(window, n if n % 2 == 1 else n - 1)
 
 
-def _rbf_kernel(
+def _kernel_matrix(
     x: np.ndarray,
     y: np.ndarray,
     length: float,
     signal_variance: float,
+    kernel: str,
 ) -> np.ndarray:
     dx = np.asarray(x, dtype=float)[:, None] - np.asarray(y, dtype=float)[None, :]
-    return signal_variance * np.exp(-0.5 * (dx / length) ** 2)
+    r = np.abs(dx)
+    kernel_key = kernel.lower().replace("-", "").replace("_", "")
+    if kernel_key in {"rbf", "gaussian"}:
+        values = np.exp(-0.5 * (r / length) ** 2)
+    elif kernel_key in {"matern32", "mat32"}:
+        scaled = 2.0 * r / length
+        values = (1.0 + scaled) * np.exp(-scaled)
+    elif kernel_key in {"matern52", "mat52"}:
+        scaled = np.sqrt(6.0) * r / length
+        values = (1.0 + scaled + 2.0 * (r / length) ** 2) * np.exp(-scaled)
+    else:
+        raise ValueError('kernel must be "rbf", "matern32", or "matern52".')
+    return signal_variance * values
 
 
 def _trapezoid(y: np.ndarray, x: np.ndarray) -> float:
@@ -349,6 +394,7 @@ def main() -> None:
     print(f"data width = {result.data_bin_width:.6e}")
     print(f"h_FD       = {result.h_fd:.6e}")
     print(f"lambda_opt = {result.lambda_opt:.6e}")
+    print(f"lambda_ab  = {result.lambda_ab:.6e}")
     print(f"alpha      = {result.alpha:.6e}")
     print(f"beta       = {result.beta:.6e}")
     print(f"gamma      = {result.gamma:.6e}")
