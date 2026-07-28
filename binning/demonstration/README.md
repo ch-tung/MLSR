@@ -38,8 +38,9 @@ trace(S Sigma S.T) = trace(W Sigma W.T)
 for \(\lambda_{\mathcal K}\). The resulting deterministic operator correction
 automatically includes finite boundaries, nonuniform sampling, heteroscedastic
 observation errors, and the selected GP signal variance. The notebook reports
-the correction factor and uses \(\lambda_{\mathcal K}\) only in the GP
-covariance. Curvature and kernel-weighted error diagnostics continue to use
+the resulting \(\lambda_{\mathcal S}\) and \(\lambda_{\mathcal K}\), using
+\(\lambda_{\mathcal K}\) only in the GP covariance. Curvature and
+kernel-weighted error diagnostics continue to use
 \(\lambda_{\mathcal S}=\mathtt{lambda_opt}\), since that is the width appearing
 in the error analysis.
 
@@ -60,10 +61,11 @@ gpr_mean = rbf_gpr_predict(
 )
 ```
 
-The diagnostic panel below the GPR reconstruction compares a local
-kernel-weighted counting-error estimate with `4 x` squared curvature bias. Both
-are estimated from the sampled observation, so the diagnostic does not require
-ground truth.
+The diagnostic panel below the GPR reconstruction compares the local
+kernel-weighted counting-error variance with the squared leading-order
+curvature bias. Both are evaluated at the equivalent smoothing width
+\(\lambda_{\mathcal S}\) and estimated from the sampled observation, so the
+diagnostic does not require ground truth or an additional scale factor.
 
 In the synthetic data generator, `total_counts` is distributed across the full
 Q range in proportion to the underlying intensity. Low-intensity regions
