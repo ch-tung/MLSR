@@ -4,7 +4,7 @@ The MLSR binning notebooks estimate two characteristic scales from a 1D
 scattering curve I(Q):
 
 * h_FD: Freedman-Diaconis optimal bin width
-* lambda_opt: optimal Gaussian/RBF kernel length
+* lambda_opt: optimal equivalent Gaussian/RBF smoothing width
 * lambda_ab: alpha-beta kernel-length heuristic
 
 Both are computed from the signal roughness and a counting-noise scale.
@@ -41,6 +41,18 @@ class BinningResult:
     window_length: Optional[int]
     polyorder: int
     used_savgol: bool
+
+
+@dataclass(frozen=True)
+class KernelCorrectionResult:
+    """Mapping from an equivalent smoothing width to a GP covariance length."""
+
+    smoothing_width: float
+    covariance_length: float
+    correction_factor: float
+    target_noise_variance: float
+    achieved_noise_variance: float
+    signal_variance: float
 
 
 def synthetic_scattering_data(
@@ -211,11 +223,11 @@ def rbf_gpr_predict(
     jitter: float = 1.0e-10,
     return_std: bool = False,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
-    """Gaussian-process posterior mean using an RBF-equivalent kernel size.
+    """Gaussian-process posterior mean using a covariance-kernel length.
 
-    This mirrors the RBF/GPR smoothing step used in the MLSR binning notebooks:
-    train on noisy observations, use ``lambda_opt`` as the RBF-equivalent length
-    scale, and return the posterior mean at ``q_predict``. Set
+    Use :func:`gp_covariance_length_from_smoothing_width` to map an equivalent
+    RBF smoothing width to the covariance length expected by this exact GP
+    posterior, then pass the corrected length as ``kernel_size``. Set
     ``return_std=True`` to also return the posterior 1-sigma uncertainty.
 
     Parameters
@@ -303,6 +315,108 @@ def kernel_smoothing_weights(
     weights = _kernel_matrix(q_predict, q_train, kernel_size, 1.0, kernel)
     sums = weights.sum(axis=1, keepdims=True)
     return weights / np.maximum(sums, np.finfo(float).eps)
+
+
+def gp_covariance_length_from_smoothing_width(
+    q_train: np.ndarray,
+    intensity_error: np.ndarray,
+    *,
+    smoothing_width: float,
+    signal_variance: float,
+    kernel: str = "rbf",
+    min_factor: float = 0.2,
+    max_factor: float = 20.0,
+    tolerance: float = 1.0e-5,
+    max_iterations: int = 40,
+) -> KernelCorrectionResult:
+    """Map an equivalent smoothing width to an exact GP covariance length.
+
+    The normalized equivalent smoother with width ``smoothing_width`` propagates
+    observational covariance as ``W Sigma W.T``. The exact GP posterior acts
+    through ``S = K (K + Sigma)^-1`` instead. This routine chooses the
+    covariance length for which ``trace(S Sigma S.T)`` matches
+    ``trace(W Sigma W.T)`` on the supplied grid. The calculation is
+    deterministic and supports finite boundaries and heteroscedastic errors.
+
+    The correction is derived directly from the two smoothing operators. It
+    depends on sampling, noise, and GP signal variance, so it is recomputed for
+    each dataset.
+    """
+
+    q_train = np.asarray(q_train, dtype=float).reshape(-1)
+    intensity_error = np.asarray(intensity_error, dtype=float).reshape(-1)
+    if len(q_train) != len(intensity_error):
+        raise ValueError("q_train and intensity_error must have equal length.")
+    if len(q_train) < 2:
+        raise ValueError("At least two training points are required.")
+    if not np.all(np.isfinite(q_train)) or not np.all(np.isfinite(intensity_error)):
+        raise ValueError("Training coordinates and errors must be finite.")
+    if np.any(intensity_error < 0):
+        raise ValueError("intensity_error must be non-negative.")
+    if smoothing_width <= 0 or signal_variance <= 0:
+        raise ValueError("smoothing_width and signal_variance must be positive.")
+    if not (0 < min_factor < max_factor):
+        raise ValueError("Require 0 < min_factor < max_factor.")
+
+    noise_variance = np.maximum(intensity_error**2, 1.0e-12)
+    identity = np.eye(len(q_train))
+
+    equivalent = _kernel_matrix(
+        q_train, q_train, smoothing_width, 1.0, kernel
+    )
+    equivalent /= np.maximum(
+        equivalent.sum(axis=1, keepdims=True), np.finfo(float).eps
+    )
+    target_noise_variance = float(
+        np.sum(equivalent**2 * noise_variance[None, :])
+    )
+
+    def propagated_noise_difference(covariance_length: float) -> tuple[float, float]:
+        covariance_kernel = _kernel_matrix(
+            q_train, q_train, covariance_length, signal_variance, kernel
+        )
+        covariance = covariance_kernel + np.diag(noise_variance + 1.0e-10)
+        smoother = covariance_kernel @ np.linalg.solve(covariance, identity)
+        achieved = float(np.sum(smoother**2 * noise_variance[None, :]))
+        return achieved - target_noise_variance, achieved
+
+    lower = min_factor * smoothing_width
+    upper = max_factor * smoothing_width
+    lower_value, _ = propagated_noise_difference(lower)
+    upper_value, _ = propagated_noise_difference(upper)
+    if lower_value == 0:
+        covariance_length = lower
+    elif upper_value == 0:
+        covariance_length = upper
+    elif lower_value * upper_value > 0:
+        raise ValueError(
+            "Could not bracket the GP covariance-length correction. "
+            "Increase max_factor or inspect the supplied noise and signal variance."
+        )
+    else:
+        for _ in range(max_iterations):
+            midpoint = 0.5 * (lower + upper)
+            midpoint_value, _ = propagated_noise_difference(midpoint)
+            if abs(midpoint_value) <= tolerance * max(target_noise_variance, 1.0e-15):
+                lower = upper = midpoint
+                break
+            if lower_value * midpoint_value <= 0:
+                upper = midpoint
+                upper_value = midpoint_value
+            else:
+                lower = midpoint
+                lower_value = midpoint_value
+        covariance_length = 0.5 * (lower + upper)
+
+    _, achieved_noise_variance = propagated_noise_difference(covariance_length)
+    return KernelCorrectionResult(
+        smoothing_width=float(smoothing_width),
+        covariance_length=float(covariance_length),
+        correction_factor=float(covariance_length / smoothing_width),
+        target_noise_variance=target_noise_variance,
+        achieved_noise_variance=achieved_noise_variance,
+        signal_variance=float(signal_variance),
+    )
 
 
 def _clean_and_sort(q: np.ndarray, intensity: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
