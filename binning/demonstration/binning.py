@@ -49,7 +49,6 @@ class KernelCorrectionResult:
 
     smoothing_width: float
     covariance_length: float
-    correction_factor: float
     target_noise_variance: float
     achieved_noise_variance: float
     signal_variance: float
@@ -412,7 +411,6 @@ def gp_covariance_length_from_smoothing_width(
     return KernelCorrectionResult(
         smoothing_width=float(smoothing_width),
         covariance_length=float(covariance_length),
-        correction_factor=float(covariance_length / smoothing_width),
         target_noise_variance=target_noise_variance,
         achieved_noise_variance=achieved_noise_variance,
         signal_variance=float(signal_variance),

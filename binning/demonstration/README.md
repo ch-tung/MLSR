@@ -61,11 +61,10 @@ gpr_mean = rbf_gpr_predict(
 )
 ```
 
-The diagnostic panel below the GPR reconstruction compares the local
-kernel-weighted counting-error variance with the squared leading-order
-curvature bias. Both are evaluated at the equivalent smoothing width
-\(\lambda_{\mathcal S}\) and estimated from the sampled observation, so the
-diagnostic does not require ground truth or an additional scale factor.
+The diagnostic panel below the GPR reconstruction plots the local
+kernel-weighted counting-error variance and the squared leading-order curvature
+bias directly. Both are evaluated at the equivalent smoothing width
+\(\lambda_{\mathcal S}\) and estimated from the sampled observation.
 
 In the synthetic data generator, `total_counts` is distributed across the full
 Q range in proportion to the underlying intensity. Low-intensity regions
@@ -75,9 +74,9 @@ absolute intensity error can be smaller. The notebook includes
 instead of absolute MSE contributions.
 
 The notebook also provides `kernel_choice = "alpha_beta"`, which uses
-`lambda_ab = h_fd` as a practical alpha-beta kernel scale. This avoids the
-explicit curvature estimate `gamma`, but it is a heuristic comparison scale, not
-the same manuscript-derived GP optimum as the alpha-gamma `lambda_opt`.
+`lambda_ab = h_fd` as an alternative alpha-beta width estimate. This avoids the
+explicit curvature estimate `gamma`, but it is not the same manuscript-derived
+GP optimum as the alpha-gamma `lambda_opt`.
 Set `gpr_kernel` in the notebook to switch between the RBF and matched-moment
 Matern kernels.
 
